@@ -1,24 +1,14 @@
 #syntax=docker/dockerfile:1.4
 
-# Adapted from https://github.com/dunglas/symfony-docker
-
-
 # Versions
 FROM dunglas/frankenphp:1-php8.3 AS frankenphp_upstream
-
-
-# The different stages of this Dockerfile are meant to be built into separate images
-# https://docs.docker.com/develop/develop-images/multistage-build/#stop-at-a-specific-build-stage
-# https://docs.docker.com/compose/compose-file/#target
-
 
 # Base FrankenPHP image
 FROM frankenphp_upstream AS frankenphp_base
 
 WORKDIR /app
 
-# persistent / runtime deps
-# hadolint ignore=DL3008
+# Persistent / runtime dependencies
 RUN apt-get update && apt-get install --no-install-recommends -y \
 	acl \
 	file \
@@ -26,25 +16,20 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
 	git \
 	&& rm -rf /var/lib/apt/lists/*
 
-# https://getcomposer.org/doc/03-cli.md#composer-allow-superuser
+# Composer configuration
 ENV COMPOSER_ALLOW_SUPERUSER=1
 
+# Install PHP extensions
 RUN set -eux; \
 	install-php-extensions \
-		@composer \
-		apcu \
-		intl \
-		opcache \
-		zip \
-	;
+	@composer \
+	apcu \
+	intl \
+	opcache \
+	zip \
+	pdo_pgsql
 
-###> recipes ###
-###> doctrine/doctrine-bundle ###
-RUN set -eux; \
-	install-php-extensions pdo_pgsql
-###< doctrine/doctrine-bundle ###
-###< recipes ###
-
+# Copy configuration and entrypoint
 COPY --link frankenphp/conf.d/app.ini $PHP_INI_DIR/conf.d/
 COPY --link --chmod=755 frankenphp/docker-entrypoint.sh /usr/local/bin/docker-entrypoint
 COPY --link frankenphp/Caddyfile /etc/caddy/Caddyfile
@@ -52,7 +37,6 @@ COPY --link frankenphp/Caddyfile /etc/caddy/Caddyfile
 ENTRYPOINT ["docker-entrypoint"]
 
 HEALTHCHECK --start-period=60s CMD curl -f http://localhost:2019/metrics || exit 1
-CMD [ "frankenphp", "run", "--config", "/etc/caddy/Caddyfile" ]
 
 # Dev FrankenPHP image
 FROM frankenphp_base AS frankenphp_dev
@@ -62,10 +46,9 @@ VOLUME /app/var/
 
 RUN mv "$PHP_INI_DIR/php.ini-development" "$PHP_INI_DIR/php.ini"
 
+# Install Xdebug for development
 RUN set -eux; \
-	install-php-extensions \
-		xdebug \
-	;
+	install-php-extensions xdebug
 
 COPY --link frankenphp/conf.d/app.dev.ini $PHP_INI_DIR/conf.d/
 
@@ -79,21 +62,27 @@ ENV FRANKENPHP_CONFIG="import worker.Caddyfile"
 
 RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
 
+# Copy production-specific configurations
 COPY --link frankenphp/conf.d/app.prod.ini $PHP_INI_DIR/conf.d/
 COPY --link frankenphp/worker.Caddyfile /etc/caddy/worker.Caddyfile
 
-# prevent the reinstallation of vendors at every changes in the source code
-COPY --link composer.* symfony.* ./
+# Optimize Composer installation
+COPY --link composer.* symfony.* ./ 
 RUN set -eux; \
 	composer install --no-cache --prefer-dist --no-dev --no-autoloader --no-scripts --no-progress
 
-# copy sources
+# Copy application source code
 COPY --link . ./
 RUN rm -Rf frankenphp/
 
+# Optimize for production
 RUN set -eux; \
 	mkdir -p var/cache var/log; \
 	composer dump-autoload --classmap-authoritative --no-dev; \
 	composer dump-env prod; \
 	composer run-script --no-dev post-install-cmd; \
-	chmod +x bin/console; sync;
+	chmod +x bin/console; \
+	sync
+
+# Run the application
+CMD [ "frankenphp", "run", "--config", "/etc/caddy/Caddyfile" ]
