@@ -21,15 +21,14 @@ ENV NEXT_TELEMETRY_DISABLED 1
 # Builder Image
 FROM base AS builder
 
-COPY --link pnpm-lock.yaml ./
-# Copy only lock file first for caching
-RUN pnpm fetch --prod
+COPY --link package.json pnpm-lock.yaml ./
+# Install ALL dependencies (including devDependencies)
+RUN pnpm install --frozen-lockfile
 
 COPY --link . .
 # Copy application source code
 
-RUN pnpm install --frozen-lockfile --offline --prod && \
-	pnpm run build
+RUN pnpm run build
 
 # Production Image
 FROM node:20-alpine AS prod
