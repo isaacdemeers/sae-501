@@ -3,7 +3,7 @@
 # Versions
 FROM node:20-alpine AS node_upstream
 
-# Base stage for development and build
+# Base stage for build
 FROM node_upstream AS base
 
 # Install necessary dependencies
@@ -17,15 +17,6 @@ RUN corepack enable && \
 
 # Disable telemetry during build and runtime
 ENV NEXT_TELEMETRY_DISABLED 1
-
-# Development Image
-FROM base as dev
-
-EXPOSE 3000
-ENV PORT 3000
-ENV HOSTNAME localhost
-
-CMD ["sh", "-c", "pnpm install; pnpm dev"]
 
 # Builder Image
 FROM base AS builder
