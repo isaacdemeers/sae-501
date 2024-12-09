@@ -29,7 +29,7 @@ function transformEvents(events: any[]) {
         title: event.title,
         start: event.datestart.replace(' ', 'T'),  // Convert "2024-11-26 08:39:00" to "2024-11-26T08:39:00"
         end: event.dateend.replace(' ', 'T'),
-        color: randomColor(),
+        color: '#475569',  // Slate 600
         extendedProps: {  // Store additional properties
             description: event.description,
             location: event.location,
